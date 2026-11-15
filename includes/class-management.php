@@ -80,11 +80,27 @@ final class Management
     {
         $user_id = (int) get_option('kmpanel_login_user', 0);
         if (!$user_id || !user_can($user_id, 'manage_options')) { return new \WP_Error('kmpanel_login_disabled', 'Select a local administrator to enable panel login.', array('status' => 403)); }
+        return self::issueUserLogin($user_id, false);
+    }
+
+    public static function issueUserLogin($user_id, $managed = true)
+    {
+        $user = get_user_by('id', $user_id);
+        if (!$user) { return new \WP_Error('kmpanel_user', 'User not found.', array('status' => 404)); }
         $token = bin2hex(random_bytes(32));
-        add_option('kmpanel_login_' . hash('sha256', $token), array('user_id' => $user_id, 'expires' => time() + 60, 'secret_hash' => hash('sha256', (string) get_option('kmpanel_secret', ''))), '', false);
+        add_option('kmpanel_login_' . hash('sha256', $token), array('managed' => $managed, 'password_hash' => hash('sha256', $user->user_pass), 'user_id' => $user_id, 'expires' => time() + 60, 'secret_hash' => hash('sha256', (string) get_option('kmpanel_secret', ''))), '', false);
         $response = new \WP_REST_Response(array('url' => add_query_arg(array('action' => 'kmpanel_login', 'token' => $token), admin_url('admin-post.php')), 'expires_at' => gmdate('c', time() + 60)));
         $response->header('Cache-Control', 'no-store, private');
         return $response;
+    }
+
+    public static function loginStillAllowed($data)
+    {
+        if (is_multisite()) { return false; }
+        $user = get_user_by('id', $data['user_id']);
+        if (!$user || empty($data['password_hash']) || !hash_equals($data['password_hash'], hash('sha256', $user->user_pass))) { return false; }
+        if (!empty($data['managed'])) { return (bool) get_option('kmpanel_user_management', false); }
+        return get_option('kmpanel_remote_management', false) && (int) get_option('kmpanel_login_user') === (int) $user->ID && user_can($user, 'manage_options');
     }
 
     public static function consumeLogin()
@@ -100,7 +116,7 @@ final class Management
         global $wpdb;
         $consumed = $wpdb->delete($wpdb->options, array('option_name' => $key));
         wp_cache_delete($key, 'options');
-        if (!$consumed || !is_array($data) || $data['expires'] < time() || !get_option('kmpanel_secret') || !isset($data['secret_hash']) || !hash_equals($data['secret_hash'], hash('sha256', (string) get_option('kmpanel_secret', ''))) || !get_option('kmpanel_remote_management', false) || (int) get_option('kmpanel_login_user') !== (int) $data['user_id'] || !user_can($data['user_id'], 'manage_options')) {
+        if (!$consumed || !is_array($data) || $data['expires'] < time() || !get_option('kmpanel_secret') || !isset($data['secret_hash']) || !hash_equals($data['secret_hash'], hash('sha256', (string) get_option('kmpanel_secret', ''))) || !self::loginStillAllowed($data)) {
             wp_die('This login link is expired, revoked, or already used.', '', array('response' => 403));
         }
         $user = get_user_by('id', $data['user_id']);

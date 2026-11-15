@@ -40,6 +40,7 @@ final class Plugin
 
     public static function routes()
     {
+        register_rest_route('kmpanel/v1', '/users', array('methods' => 'POST', 'callback' => array(Users::class, 'handle'), 'permission_callback' => array(Users::class, 'allowed')));
         register_rest_route('kmpanel/v1', '/update', array('methods' => 'POST', 'callback' => array(Management::class, 'update'), 'permission_callback' => array(Management::class, 'allowed')));
         register_rest_route('kmpanel/v1', '/login', array('methods' => 'POST', 'callback' => array(Management::class, 'issueLogin'), 'permission_callback' => array(Management::class, 'allowed')));
         register_rest_route('kmpanel/v1', '/status', array('methods' => 'GET', 'callback' => array(Telemetry::class, 'status'), 'permission_callback' => array(Auth::class, 'authorize')));
@@ -65,6 +66,7 @@ final class Plugin
             if ($url && (!wp_http_validate_url($url) || wp_parse_url($url, PHP_URL_QUERY) || wp_parse_url($url, PHP_URL_FRAGMENT) || wp_parse_url($url, PHP_URL_USER))) {
                 wp_die('Use a public HTTPS URL without credentials, query, or fragment.');
             }
+            update_option('kmpanel_user_management', isset($_POST['user_management']), false);
             update_option('kmpanel_remote_management', isset($_POST['remote_management']), false);
             $login_user = isset($_POST['login_user']) ? absint($_POST['login_user']) : 0;
             update_option('kmpanel_login_user', $login_user && user_can($login_user, 'manage_options') ? $login_user : 0, false);
@@ -94,6 +96,7 @@ final class Plugin
         <table class="form-table"><tr><th><label for="panel_url">KMPanel URL</label></th><td><input id="panel_url" type="url" name="panel_url" class="regular-text" placeholder="https://panel.example.com" value="<?php echo esc_attr(get_option('kmpanel_panel_url', '')); ?>"><p class="description">Required only for updates from a private GitHub repository through KMPanel.</p></td></tr>
         <tr><th>Update source</th><td><select name="update_source"><option value="github" <?php selected(get_option('kmpanel_update_source', 'github'), 'github'); ?>>GitHub public releases</option><option value="panel" <?php selected(get_option('kmpanel_update_source', 'github'), 'panel'); ?>>KMPanel proxy (private repository)</option></select></td></tr>
         <tr><th>Automatic updates</th><td><label><input type="checkbox" name="auto_update" value="1" <?php checked((bool) get_option('kmpanel_auto_update', true)); ?>>Automatically install verified releases of KMPanel Connector</label><p class="description">Other plugins are unaffected. WordPress automatic updates and its scheduler must be enabled.</p></td></tr>
+        <tr><th>User management</th><td><label><input type="checkbox" name="user_management" value="1" <?php checked((bool) get_option('kmpanel_user_management', false)); ?>>Allow KMPanel administrators to list, create, delete users, reset passwords and sign in as any user</label></td></tr>
         <tr><th>Remote management</th><td><label><input type="checkbox" name="remote_management" value="1" <?php checked((bool) get_option('kmpanel_remote_management', false)); ?>>Allow signed, explicit plugin/theme/core updates from KMPanel</label><p class="description">Disabled by default. This does not enable automatic updates of other plugins.</p></td></tr>
         <tr><th>One-time admin login</th><td><select name="login_user"><option value="0">Disabled</option><?php foreach (get_users(array('role' => 'administrator', 'fields' => array('ID', 'display_name'))) as $admin) : ?><option value="<?php echo esc_attr($admin->ID); ?>" <?php selected((int) get_option('kmpanel_login_user', 0), $admin->ID); ?>><?php echo esc_html($admin->display_name); ?></option><?php endforeach; ?></select><p class="description">Choose the administrator account for 60-second single-use links. Requires remote management and HTTPS.</p></td></tr></table>
         <?php if ($status) : ?><p>Update check: <?php echo esc_html($status['checked_at'] ?? ''); ?> — <?php echo esc_html(!empty($status['ok']) ? 'Latest release ' . $status['version'] : ($status['message'] ?? 'Unavailable')); ?></p><?php endif; ?>

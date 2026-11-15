@@ -3,7 +3,7 @@ Contributors: kelyanmedia
 Tags: monitoring, management, inventory
 Requires at least: 6.0
 Requires PHP: 7.4
-Stable tag: 1.0.2
+Stable tag: 1.1.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -23,7 +23,7 @@ Plugin updates come from https://api.github.com/repos/kelyanmedia/KMPanelConnect
 4. Automatic connector updates are enabled by default. WordPress update scheduling must run.
 
 == Changelog ==
-= 1.0.2 =
+= 1.1.0 =
 Preserve plugin activation during targeted updates launched from WP-CLI or remote management; verify activation state and restore temporary background context.
 = 1.0.1 =
 Dedicated 15-minute connector-only background updater, server-cron entry point, update diagnostics in telemetry, and additional package-integrity tests.
