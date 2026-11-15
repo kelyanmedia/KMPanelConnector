@@ -40,7 +40,9 @@ final class Management
                 if (!isset($plugins[$slug])) { return new \WP_Error('kmpanel_plugin', 'Installed plugin not found.', array('status' => 404)); }
                 wp_update_plugins();
                 $upgrader = new \Plugin_Upgrader($skin);
-                $result = $upgrader->upgrade($slug);
+                $was_active = is_plugin_active($slug);
+                $result = Updater::runAsBackground(static function () use ($upgrader, $slug) { return $upgrader->upgrade($slug); });
+                if (!is_wp_error($result) && $result !== false && is_plugin_active($slug) !== $was_active) { return new \WP_Error('kmpanel_active_state', 'Plugin active state changed unexpectedly. Inspect the site before retrying.', array('status' => 500)); }
                 wp_clean_plugins_cache(true);
                 $plugins = get_plugins();
                 $version = isset($plugins[$slug]) ? $plugins[$slug]['Version'] : null;

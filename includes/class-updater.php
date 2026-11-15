@@ -20,6 +20,18 @@ final class Updater
 
     public static function clear() { delete_transient(self::CACHE); }
 
+    /** Give a targeted updater background semantics even when invoked through WP-CLI. */
+    public static function runAsBackground($operation)
+    {
+        $background = static function () { return true; };
+        add_filter('wp_doing_cron', $background, PHP_INT_MAX);
+        try {
+            return $operation();
+        } finally {
+            remove_filter('wp_doing_cron', $background, PHP_INT_MAX);
+        }
+    }
+
     /** Check and install only this connector; safe for a dedicated server cron. */
     public static function automaticUpdate()
     {
@@ -43,9 +55,11 @@ final class Updater
             $updates->checked[$file] = KMPANEL_CONNECTOR_VERSION;
             set_site_transient('update_plugins', $updates);
             // Never call run(): it would process unrelated plugins, themes and core.
-            $updater->update('plugin', $offer);
+            $was_active = is_plugin_active($file);
+            $was_network_active = is_plugin_active_for_network($file);
+            self::runAsBackground(static function () use ($updater, $offer) { return $updater->update('plugin', $offer); });
             $installed = get_plugin_data(KMPANEL_CONNECTOR_FILE, false, false);
-            update_option('kmpanel_auto_update_status', array('checked_at' => gmdate('c'), 'target_version' => $release['version'], 'installed_version' => $installed['Version'], 'ok' => $installed['Version'] === $release['version']), false);
+            update_option('kmpanel_auto_update_status', array('checked_at' => gmdate('c'), 'target_version' => $release['version'], 'installed_version' => $installed['Version'], 'active' => is_plugin_active($file), 'network_active' => is_plugin_active_for_network($file), 'ok' => $installed['Version'] === $release['version'] && is_plugin_active($file) === $was_active && is_plugin_active_for_network($file) === $was_network_active), false);
         } finally {
             \WP_Upgrader::release_lock('auto_updater');
         }

@@ -7,6 +7,10 @@ define('HOUR_IN_SECONDS', 3600);
 define('MINUTE_IN_SECONDS', 60);
 $options = array();
 $transients = array();
+$filters = array();
+function add_filter($name, $callback, $priority = 10) { global $filters; $filters[$name][$priority][] = $callback; }
+function remove_filter($name, $callback, $priority = 10) { global $filters; foreach ($filters[$name][$priority] ?? array() as $i => $existing) { if ($existing === $callback) { unset($filters[$name][$priority][$i]); } } }
+function wp_doing_cron() { global $filters; $value = false; foreach ($filters['wp_doing_cron'] ?? array() as $callbacks) { foreach ($callbacks as $callback) { $value = $callback($value); } } return $value; }
 function get_option($key, $default = false) { global $options; return array_key_exists($key, $options) ? $options[$key] : $default; }
 function add_option($key, $value, $deprecated = '', $autoload = null) { global $options; if (array_key_exists($key, $options)) { return false; } $options[$key] = $value; return true; }
 function update_option($key, $value, $autoload = null) { global $options; $options[$key] = $value; return true; }
@@ -84,4 +88,10 @@ $mock_status = 403;
 check(Updater::download(false, $download_url, null, array('plugin' => 'kmpanel-connector/kmpanel-connector.php'))->code === 'kmpanel_integrity', 'failed HTTP download rejected');
 check(Updater::download(false, 'https://other.test/other.zip', null, array('plugin' => 'other/other.php')) === false, 'other plugin downloads unaffected');
 check(Updater::download(false, 'https://evil.test/plugin.zip', null, array('plugin' => 'kmpanel-connector/kmpanel-connector.php'))->code === 'kmpanel_release', 'substituted connector package rejected');
+check(wp_doing_cron() === false, 'WP-CLI starts outside cron');
+$result = Updater::runAsBackground(static function () { return wp_doing_cron(); });
+check($result === true, 'targeted updater gets background activation-preserving semantics');
+check(wp_doing_cron() === false, 'background context restored after successful update');
+try { Updater::runAsBackground(static function () { throw new RuntimeException('simulated failure'); }); } catch (RuntimeException $e) {}
+check(wp_doing_cron() === false, 'background context restored after failed update');
 echo "PASS: $count security and contract checks\n";

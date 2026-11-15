@@ -103,7 +103,7 @@ Run the following as the site's Unix owner. It checks and updates only KMPanel C
 wp --path=/path/to/wordpress eval 'do_action("kmpanel_connector_update");'
 ```
 
-A system cron every 15 minutes makes this independent of website traffic. Do not replace the site's existing WordPress cron or use `wp cron event run --all` for this purpose. For the initial update from 1.0.0 (which predates this hook), use the targeted smoke script in `scripts/auto-update-smoke.php` with `wp eval-file`.
+A system cron every 15 minutes makes this independent of website traffic. Do not replace the site's existing WordPress cron or use `wp cron event run --all` for this purpose. Version 1.0.2 adds scoped background semantics so WP-CLI updates preserve activation. For upgrading from 1.0.0 or 1.0.1, use the current `scripts/auto-update-smoke.php` with `wp eval-file`: it applies those semantics externally, then checks both version and activation. Do not use the old smoke script or the unwrapped 1.0.1 hook for that transition. As an alternative bootstrap, call the old hook from a real WordPress cron context. The updater does not blindly reactivate a failed package.
 
 ## Private repository proxy contract
 
