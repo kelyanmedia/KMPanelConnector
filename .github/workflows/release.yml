@@ -1,0 +1,49 @@
+name: Test and release connector
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php: ['7.4', '8.1', '8.4']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+      - name: Syntax and security contracts
+        run: |
+          find . -name '*.php' -not -path './.git/*' -print0 | xargs -0 -n1 php -l
+          php tests/run.php
+      - name: Build installable package
+        run: python3 scripts/package.py
+  release:
+    needs: test
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: connector-release
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/package.py
+      - name: Publish version once
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          VERSION=$(sed -n 's/^ \* Version: //p' kmpanel-connector.php)
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            echo "Version $VERSION already published. Bump plugin header, runtime constant and readme stable tag for a new update."
+            exit 0
+          fi
+          gh release create "v$VERSION" dist/kmpanel-connector.zip dist/kmpanel-connector.zip.sha256 --target "$GITHUB_SHA" --title "KMPanel Connector $VERSION" --generate-notes --latest
