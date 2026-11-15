@@ -17,6 +17,10 @@ function wp_parse_url($url, $component = -1) { return parse_url($url, $component
 function plugin_basename($file) { return 'kmpanel-connector/kmpanel-connector.php'; }
 function home_url() { return 'https://example.com'; }
 function is_multisite() { return false; }
+function wp_tempnam($name) { return tempnam(sys_get_temp_dir(), 'kmtest_'); }
+function wp_safe_remote_get($url, $args = array()) { global $mock_body, $mock_status; if (isset($args['filename'])) { file_put_contents($args['filename'], $mock_body); } return array('response' => array('code' => $mock_status), 'body' => $mock_body); }
+function wp_remote_retrieve_response_code($response) { return $response['response']['code']; }
+function wp_remote_retrieve_body($response) { return $response['body']; }
 function is_wp_error($value) { return $value instanceof WP_Error; }
 class WP_Error { public $code; public $data; function __construct($code, $message, $data = null) { $this->code = $code; $this->data = $data; } }
 class TestRequest {
@@ -68,4 +72,16 @@ check(Updater::autoUpdate(true, (object) array('plugin' => 'kmpanel-connector/km
 $headers['x-km-nonce'] = str_repeat('c', 32);
 $headers['x-km-signature'] = Auth::signature($secret, $headers['x-km-timestamp'], $headers['x-km-nonce'], 'POST', '/kmpanel/v1/update');
 check(Management::allowed(new TestRequest($headers, '', '/kmpanel/v1/update', 'POST'))->code === 'kmpanel_disabled', 'remote updates disabled by default');
+$mock_body = 'signed update zip bytes'; $mock_status = 200;
+$download_url = 'https://github.com/kelyanmedia/KMPanelConnector/releases/download/v1.0.0/kmpanel-connector.zip';
+$transients[Updater::CACHE] = array('version' => '1.0.0', 'download_url' => $download_url, 'sha256' => hash('sha256', $mock_body), 'proxy' => false);
+$download = Updater::download(false, $download_url, null, array('plugin' => 'kmpanel-connector/kmpanel-connector.php'));
+check(is_string($download) && file_get_contents($download) === $mock_body, 'verified update is handed to WordPress');
+unlink($download);
+$mock_body = 'tampered download';
+check(Updater::download(false, $download_url, null, array('plugin' => 'kmpanel-connector/kmpanel-connector.php'))->code === 'kmpanel_integrity', 'modified archive rejected');
+$mock_status = 403;
+check(Updater::download(false, $download_url, null, array('plugin' => 'kmpanel-connector/kmpanel-connector.php'))->code === 'kmpanel_integrity', 'failed HTTP download rejected');
+check(Updater::download(false, 'https://other.test/other.zip', null, array('plugin' => 'other/other.php')) === false, 'other plugin downloads unaffected');
+check(Updater::download(false, 'https://evil.test/plugin.zip', null, array('plugin' => 'kmpanel-connector/kmpanel-connector.php'))->code === 'kmpanel_release', 'substituted connector package rejected');
 echo "PASS: $count security and contract checks\n";

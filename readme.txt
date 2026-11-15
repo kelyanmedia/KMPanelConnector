@@ -3,7 +3,7 @@ Contributors: kelyanmedia
 Tags: monitoring, management, inventory
 Requires at least: 6.0
 Requires PHP: 7.4
-Stable tag: 1.0.0
+Stable tag: 1.0.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -23,5 +23,7 @@ Plugin updates come from https://api.github.com/repos/kelyanmedia/KMPanelConnect
 4. Automatic connector updates are enabled by default. WordPress update scheduling must run.
 
 == Changelog ==
+= 1.0.1 =
+Dedicated 15-minute connector-only background updater, server-cron entry point, update diagnostics in telemetry, and additional package-integrity tests.
 = 1.0.0 =
 Initial release: signed telemetry, replay protection, automatic verified GitHub updates, optional explicit remote updates and 60-second single-use admin login.

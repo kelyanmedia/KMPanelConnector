@@ -7,6 +7,8 @@ final class Plugin
 {
     public static function boot()
     {
+        add_filter('cron_schedules', array(__CLASS__, 'schedules'));
+        add_action('init', array(__CLASS__, 'ensureSchedule'));
         add_action('rest_api_init', array(__CLASS__, 'routes'));
         add_action('admin_menu', array(__CLASS__, 'menu'));
         add_action('admin_post_kmpanel_settings', array(__CLASS__, 'save'));
@@ -23,7 +25,18 @@ final class Plugin
         if (!wp_next_scheduled('kmpanel_cleanup')) { wp_schedule_event(time() + 300, 'hourly', 'kmpanel_cleanup'); }
     }
 
-    public static function deactivate() { wp_clear_scheduled_hook('kmpanel_cleanup'); }
+    public static function deactivate() { wp_clear_scheduled_hook('kmpanel_cleanup'); wp_clear_scheduled_hook('kmpanel_connector_update'); }
+
+    public static function schedules($schedules)
+    {
+        $schedules['kmpanel_fifteen_minutes'] = array('interval' => 900, 'display' => 'KMPanel: every 15 minutes');
+        return $schedules;
+    }
+
+    public static function ensureSchedule()
+    {
+        if (!wp_next_scheduled('kmpanel_connector_update')) { wp_schedule_event(time() + 900, 'kmpanel_fifteen_minutes', 'kmpanel_connector_update'); }
+    }
 
     public static function routes()
     {

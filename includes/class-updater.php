@@ -14,10 +14,44 @@ final class Updater
         add_filter('auto_update_plugin', array(__CLASS__, 'autoUpdate'), 10, 2);
         add_filter('upgrader_pre_download', array(__CLASS__, 'download'), 10, 4);
         add_filter('plugins_api', array(__CLASS__, 'info'), 10, 3);
+        add_action('kmpanel_connector_update', array(__CLASS__, 'automaticUpdate'));
         add_action('upgrader_process_complete', array(__CLASS__, 'clear'), 10, 0);
     }
 
     public static function clear() { delete_transient(self::CACHE); }
+
+    /** Check and install only this connector; safe for a dedicated server cron. */
+    public static function automaticUpdate()
+    {
+        Auth::cleanup();
+        if (!get_option('kmpanel_auto_update', true)) { return; }
+        require_once ABSPATH . 'wp-admin/includes/file.php';
+        require_once ABSPATH . 'wp-admin/includes/plugin.php';
+        require_once ABSPATH . 'wp-admin/includes/update.php';
+        require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+        $updater = new \WP_Automatic_Updater();
+        if ($updater->is_disabled() || !\WP_Upgrader::create_lock('auto_updater')) { return; }
+        try {
+            self::clear();
+            $release = self::latest();
+            if (!$release || !version_compare($release['version'], KMPANEL_CONNECTOR_VERSION, '>')) { return; }
+            $file = plugin_basename(KMPANEL_CONNECTOR_FILE);
+            $offer = (object) array('id' => 'https://github.com/' . self::REPOSITORY, 'slug' => 'kmpanel-connector', 'plugin' => $file, 'new_version' => $release['version'], 'url' => 'https://github.com/' . self::REPOSITORY, 'package' => $release['download_url'], 'requires' => $release['requires'], 'requires_php' => $release['requires_php'], 'tested' => $release['tested']);
+            $updates = get_site_transient('update_plugins');
+            if (!is_object($updates)) { $updates = (object) array('response' => array(), 'checked' => array()); }
+            $updates->response[$file] = $offer;
+            $updates->checked[$file] = KMPANEL_CONNECTOR_VERSION;
+            set_site_transient('update_plugins', $updates);
+            // Never call run(): it would process unrelated plugins, themes and core.
+            $updater->update('plugin', $offer);
+            $installed = get_plugin_data(KMPANEL_CONNECTOR_FILE, false, false);
+            update_option('kmpanel_auto_update_status', array('checked_at' => gmdate('c'), 'target_version' => $release['version'], 'installed_version' => $installed['Version'], 'ok' => $installed['Version'] === $release['version']), false);
+        } finally {
+            \WP_Upgrader::release_lock('auto_updater');
+        }
+    }
+
+
 
     public static function autoUpdate($update, $item)
     {
